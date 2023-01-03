@@ -541,15 +541,15 @@ jobs:
       - run: rm -rf $HOME/.jsvu
       - install-v8
       - run-tests:
-          title: "wasm64_v8"
-          test_targets: "wasm64_v8"
-      - run-tests:
           title: "wasm64l"
           test_targets: "wasm64l"
       - install-node-canary
       - run-tests:
           title: "wasm64"
           test_targets: "wasm64"
+      - run-tests:
+          title: "wasm64_v8"
+          test_targets: "wasm64_v8"
       - upload-test-results
   test-node-compat:
     # We don't use `bionic` here since its tool old to run recent node versions:
