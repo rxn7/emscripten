@@ -2262,13 +2262,13 @@ var LibrarySDL = {
         }
       }
       var callStbImage = function(func, params) {
-        var x = Module['_malloc']({{{ getNativeTypeSize('i32') }}});
-        var y = Module['_malloc']({{{ getNativeTypeSize('i32') }}});
-        var comp = Module['_malloc']({{{ getNativeTypeSize('i32') }}});
+        var x = _malloc({{{ getNativeTypeSize('i32') }}});
+        var y = _malloc({{{ getNativeTypeSize('i32') }}});
+        var comp = _malloc({{{ getNativeTypeSize('i32') }}});
         addCleanup(function() {
-          Module['_free'](x);
-          Module['_free'](y);
-          Module['_free'](comp);
+          _free(x);
+          _free(y);
+          _free(comp);
           if (data) Module['_stbi_image_free'](data);
         });
         var data = Module['_' + func].apply(null, params.concat([x, y, comp, 0]));
@@ -2307,10 +2307,10 @@ var LibrarySDL = {
           if (raw === null) err('Trying to reuse preloaded image, but freePreloadedMediaOnUse is set!');
 #if STB_IMAGE
           var lengthBytes = lengthBytesUTF8(filename)+1;
-          var name = Module['_malloc'](lengthBytes);
+          var name = _malloc(lengthBytes);
           stringToUTF8(filename, name, lengthBytes);
           addCleanup(function() {
-            Module['_free'](name);
+            _free(name);
           });
           raw = callStbImage('stbi_load', [name]);
           if (!raw) return 0;

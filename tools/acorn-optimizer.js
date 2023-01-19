@@ -584,6 +584,28 @@ function isDynamicDynCall(node) {
   );
 }
 
+function isExportWrapperFunction(f) {
+  let found;
+  fullWalk(f.body, inner => {
+    if (inner.type == 'ReturnStatement') {
+      const rtn = inner.argument;
+      if (rtn.type == 'CallExpression') {
+        let target = rtn.callee.object;
+        if (target.type == 'ParenthesizedExpression') {
+          target = target.expression;
+        }
+        if (target.type == 'AssignmentExpression') {
+          const rhs = target.right;
+          if (isAsmUse(rhs)) {
+            found = getAsmOrModuleUseName(rhs);
+          }
+        }
+      }
+    }
+  });
+  return found;
+}
+
 //
 // Emit the DCE graph, to help optimize the combined JS+wasm.
 // This finds where JS depends on wasm, and where wasm depends
@@ -637,6 +659,10 @@ function emitDCEGraph(ast) {
   // async compilation is enabled. It can be either:
   //
   //  var _malloc = Module["_malloc"] = asm["_malloc"];
+  //
+  // or
+  //
+  //  var _malloc = asm["_malloc"];
   //
   // or
   //
@@ -698,7 +724,21 @@ function emitDCEGraph(ast) {
         const item = node.declarations[0];
         const name = item.id.name;
         const value = item.init;
-        if (value && value.type === 'AssignmentExpression') {
+        if (value && isAsmUse(value)) {
+          const asmName = getAsmOrModuleUseName(value);
+          // this is
+          //  var _x = asm['x'];
+          saveAsmExport(name, asmName);
+          emptyOut(node);
+        } else if (value && value.type === 'FunctionExpression') {
+          // this is
+          //  var x = function() { return (x = Module['asm']['x']).apply .. }
+          let asmName = isExportWrapperFunction(value);
+          if (asmName) {
+            saveAsmExport(name, asmName);
+            emptyOut(node);
+          }
+        } else if (value && value.type === 'AssignmentExpression') {
           const assigned = value.left;
           if (isModuleUse(assigned) && getAsmOrModuleUseName(assigned) === name) {
             // this is
@@ -942,6 +982,7 @@ function applyDCEGraphRemovals(ast) {
       });
     } else if (node.type === 'AssignmentExpression') {
       // when we assign to a thing we don't need, we can just remove the assign
+      //   var x = Module['x'] = asm['x'];
       const target = node.left;
       if (isAsmUse(target) || isModuleUse(target)) {
         const name = getAsmOrModuleUseName(target);
@@ -950,6 +991,27 @@ function applyDCEGraphRemovals(ast) {
         if (unused.has(full) && (isAsmUse(value) || !hasSideEffects(value))) {
           // This will be in a var init, and we just remove that value.
           convertToNothingInVarInit(node);
+        }
+      }
+    } else if (node.type === 'VariableDeclaration') {
+      // Handle the case we declare variable but don't assign the module:
+      //   var x = asm['x'];
+      // and
+      //   var x = function() { return (x = asm['x']).apply(...) };
+      const init = node.declarations[0].init;
+      if (init) {
+        if (isAsmUse(init)) {
+          const name = getAsmOrModuleUseName(init);
+          const full = 'emcc$export$' + name;
+          if (unused.has(full)) {
+            convertToNothingInVarInit(init);
+          }
+        } else if (init.type == 'FunctionExpression') {
+          const name = isExportWrapperFunction(init);
+          const full = 'emcc$export$' + name;
+          if (unused.has(full)) {
+            convertToNothingInVarInit(init);
+          }
         }
       }
     } else if (node.type === 'ExpressionStatement') {

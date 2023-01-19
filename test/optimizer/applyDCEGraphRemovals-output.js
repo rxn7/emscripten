@@ -13,6 +13,8 @@ var expD3 = Module["expD3"] = asm["expD3"];
 
 var expD4;
 
+var expD5;
+
 var expI1 = Module["expI1"] = function() {
  return (expI1 = Module["expI1"] = Module["asm"]["expI1"]).apply(null, arguments);
 };
@@ -26,6 +28,8 @@ var expI3 = Module["expI3"] = function() {
 };
 
 var expI4;
+
+var expI5;
 
 expD1;
 
