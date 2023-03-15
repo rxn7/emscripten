@@ -25,6 +25,14 @@ executors:
       EMSDK_NOTTY: "1"
     macos:
       xcode: "13.4.1"
+    resource_class: macos.x86.medium.gen2
+  mac-arm64:
+    environment:
+      EMSDK_NOTTY: "1"
+    macos:
+      xcode: "14.2.0"
+    resource_class: macos.m1.large.gen1
+
 
 commands:
   download-chrome:
@@ -259,6 +267,25 @@ commands:
           test_targets: << parameters.test_targets >>
           title: << parameters.title >>
       - upload-test-results
+  setup-macos:
+    steps:
+      - run:
+          name: Install brew package dependencies
+          environment:
+            HOMEBREW_NO_AUTO_UPDATE: "1"
+          command: |
+            brew list cmake || brew install cmake
+            brew list ninja || brew install ninja
+            brew list python3 || brew install python3
+            brew list pkg-config || brew install pkg-config
+      - checkout
+      - run:
+          name: submodule update
+          command: git submodule update --init
+      # note we do *not* build all libraries and freeze the cache; as we run
+      # only limited tests here, it's more efficient to build on demand
+      - pip-install:
+          python: "$EMSDK_PYTHON"
   test-firefox:
     description: "Runs emscripten tests under firefox"
     steps:
@@ -694,6 +721,31 @@ jobs:
           test_targets: "sockets.test_nodejs_sockets_echo*"
       - upload-test-results
 
+  test-mac-arm64:
+    executor: mac-arm64
+    environment:
+      # We don't install d8 or modern node on the mac runner so we skip any
+      # tests that depend on those.
+      EMTEST_SKIP_V8: "1"
+      EMTEST_SKIP_EH: "1"
+      EMTEST_SKIP_WASM64: "1"
+      EMTEST_SKIP_SIMD: "1"
+      EMTEST_SKIP_SCONS: "1"
+      EMCC_SKIP_SANITY_CHECK: "1"
+    steps:
+      - setup-macos
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Remove Linux binaries
+          command: |
+            rm -rf ~/emsdk ~/vms ~/.jsvu
+      - build
+      - run-tests:
+          title: "other+extras"
+          test_targets: "other skip:other.test_native_link_error_message"
+      - upload-test-results
+
   test-mac:
     executor: mac
     environment:
@@ -706,33 +758,9 @@ jobs:
       EMTEST_SKIP_SCONS: "1"
       EMCC_SKIP_SANITY_CHECK: "1"
     steps:
-      - run:
-          name: Install brew package dependencies
-          environment:
-            HOMEBREW_NO_AUTO_UPDATE: "1"
-          command: |
-            brew list cmake || brew install cmake
-            brew list ninja || brew install ninja
-            brew list python3 || brew install python3
-            brew list pkg-config || brew install pkg-config
-      - attach_workspace:
-          at: ~/
-      - checkout
-      - run:
-          name: submodule update
-          command: git submodule update --init
-      - run:
-          name: Remove Linux binaries
-          command: |
-            rm -rf ~/emsdk ~/vms ~/.jsvu
+      - setup-macos
       - build
-      # note we do *not* build all libraries and freeze the cache; as we run
-      # only limited tests here, it's more efficient to build on demand
-      - pip-install:
-          python: "$EMSDK_PYTHON"
       - run-tests:
-          # skip other.test_stack_switching_size as we do not currently install
-          # d8 on mac
           title: "other+extras"
           test_targets: "
             other
@@ -740,8 +768,7 @@ jobs:
             core0.test_lua
             core0.test_longjmp_standalone
             core2.test_sse1
-            skip:other.test_native_link_error_message
-            skip:other.test_stack_switching_size"
+            skip:other.test_native_link_error_message"
       - upload-test-results
 
 workflows:
@@ -787,6 +814,7 @@ workflows:
             - build-linux
       - test-node-compat
       - test-windows
+      - test-mac-arm64
       - test-mac:
           # The mac tester also uses the libraries built on the linux builder to
           # save total build time (this is fine because the libraries are wasm
