@@ -56,6 +56,7 @@ MINIMAL_TASKS = [
     'libemmalloc-verbose',
     'libemmalloc-memvalidate-verbose',
     'libGL',
+    'libGL-emu-webgl2',
     'libhtml5',
     'libsockets',
     'libstubs',
