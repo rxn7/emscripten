@@ -127,6 +127,10 @@ var SyscallsLibrary = {
   _mmap_js__deps: ['$SYSCALLS',
 #if FILESYSTEM && SYSCALLS_REQUIRE_FILESYSTEM
     '$FS',
+    // FS/mmapAlloc does an optional/soft dependnecy on
+    // `emscripten_builtin_memalign` but any program that depends on `_mmap_js`
+    // has a hard dependency.
+    'emscripten_builtin_memalign',
 #endif
   ],
   _mmap_js: function(len, prot, flags, fd, off, allocated, addr) {
